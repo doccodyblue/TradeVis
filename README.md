@@ -20,6 +20,7 @@ Analyze and visualize the performance of different trading algorithms using data
 ![img_4.png](img_4.png)
 ![img_5.png](img_5.png)
 ![img_6.png](img_6.png)
+  
 (the screenshots above are from a demo test account and are not representative of the performance of the algorithms)
 
 ## Requirements:
