@@ -91,16 +91,19 @@ def map_algo_name(magic, comment):
                 return identifier
     return comment if comment != 0 else str(magic) if magic != 0 else "UNKNOWN"
 
+
 def evaluate_algorithms_helper(data, group_by_cols):
     data['Identifier_Combined'] = data.apply(lambda row: map_algo_name(row['MagicNumber'], row['Comment']), axis=1)
     grouped = data.groupby(group_by_cols).agg(
         total_profit=pd.NamedAgg(column='Profit', aggfunc=sum),
         number_of_trades=pd.NamedAgg(column='TradeID', aggfunc='count'),
-        max_drawdown=pd.NamedAgg(column='Profit', aggfunc='min')
+        max_drawdown=pd.NamedAgg(column='Profit', aggfunc='min'),
+        first_trade_date=pd.NamedAgg(column='OpenTime', aggfunc='min'),
+        winning_trades=pd.NamedAgg(column='Profit', aggfunc=lambda x: (x > 0).sum()),
+        losing_trades=pd.NamedAgg(column='Profit', aggfunc=lambda x: (x <= 0).sum())
     ).reset_index()
     grouped['Score'] = grouped['total_profit'] - grouped['max_drawdown']
     return grouped
-
 
 def evaluate_algorithms(data):
     grouped = evaluate_algorithms_helper(data, ['Identifier_Combined'])
@@ -117,24 +120,39 @@ def evaluate_algorithms_cumulative(data):
     data['CumulativeProfit'] = data.groupby('Identifier_Combined')['Profit'].cumsum()
     return data
 
-# Plotting
+
 def plot_total_profit_by_symbol(data):
-    fig = px.bar(data,
-                 x='total_profit',
-                 y='Identifier_Combined',
-                 color='Symbol',
-                 orientation='h',
-                 labels={'Identifier_Combined': 'Algorithm', 'total_profit': 'Total Profit', 'Symbol': 'Traded Symbol'},
-                 title='Total Profit by Algorithm and Traded Symbol')
-    fig.update_layout(
-        showlegend=True,
-        plot_bgcolor="black",
-        paper_bgcolor="black",
-        font=dict(color="white"),
-        xaxis=dict(gridcolor="gray"),
-        yaxis=dict(gridcolor="gray")
-    )
-    fig.show()
+	# Calculate number of days since the first trade for each algorithm
+	data['days_since_first_trade'] = (pd.Timestamp.now() - data['first_trade_date']).dt.days
+
+	# Create custom hover text
+	data['hover_text'] = "Algorithm: " + data['Identifier_Combined'] + \
+						 "<br>Total Profit: " + data['total_profit'].astype(str) + \
+						 "<br>Number of Trades: " + data['number_of_trades'].astype(str) + \
+						 "<br>Winning Trades: " + data['winning_trades'].astype(str) + \
+						 "<br>Losing Trades: " + data['losing_trades'].astype(str) + \
+						 "<br>Days Since First Trade: " + data['days_since_first_trade'].astype(str) + \
+						 "<br>Traded Symbol: " + data['Symbol']
+
+	fig = px.bar(data,
+				 x='total_profit',
+				 y='Identifier_Combined',
+				 color='Symbol',
+				 orientation='h',
+				 labels={'Identifier_Combined': 'Algorithm', 'total_profit': 'Total Profit', 'Symbol': 'Traded Symbol'},
+				 title='Total Profit by Algorithm and Traded Symbol',
+				 hover_data={'total_profit': False, 'Symbol': False, 'Identifier_Combined': False},
+				 hover_name='hover_text')
+
+	fig.update_layout(
+		showlegend=True,
+		plot_bgcolor="black",
+		paper_bgcolor="black",
+		font=dict(color="white"),
+		xaxis=dict(gridcolor="gray"),
+		yaxis=dict(gridcolor="gray")
+	)
+	fig.show()
 
 
 def plot_cumulative_profit_over_time(data, cumulative_data):
