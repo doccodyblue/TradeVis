@@ -15,8 +15,11 @@ Analyze and visualize the performance of different trading algorithms using data
   - Relative Risk Based on Lot Size Over Time (with special handling for shares)
 - **Interactive Visualizations**: Gain insights with interactive plots powered by `plotly`.
 
-![img.png](img.png)
-![img_2.png](img_2.png)
+![img_1.png](img_1.png)
+![img_3.png](img_3.png)
+![img_4.png](img_4.png)
+![img_5.png](img_5.png)
+![img_6.png](img_6.png)
 (the screenshots above are from a demo test account and are not representative of the performance of the algorithms)
 
 ## Requirements:
