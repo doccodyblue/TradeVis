@@ -6,6 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 import argparse
+from colorama import Fore, Style
 
 debug = False
 
@@ -27,7 +28,7 @@ ALGO_MAPPING_CONFIG = {
 	},
 	'Perceptrader': {
 		'magic_numbers': [12648400, 12648401, 22648400, 22648401],
-		'comment_patterns': ['Perceptrader*']
+		'comment_patterns': ['Perceptrade*']
 	},
 	'MA_SB_AV1_SH1': {
 		'magic_numbers': [23423450, 23423410],
@@ -55,11 +56,31 @@ ALGO_MAPPING_CONFIG = {
 	},
 	'AS-EnhancedBO-NQ100': {
 		'magic_numbers': [1492],
-		'comment_patterns': ['']
+		'comment_patterns': ['ASEnhancedBO*']
 	},
 	'MeetAlgo Strategy Builder EA EURGBP': {
 		'magic_numbers': [23423497],
 		'comment_patterns': ['']
+	},
+	'AS-LondonBreakout': {
+		'magic_numbers': [88378, 88374],
+		'comment_patterns': ['AS-LondonBreakout*']
+	},
+	'BotAGI-FX': {
+		'magic_numbers': [100, 101],
+		'comment_patterns': ['EA MT5 BotAGI*']
+	},
+	'ManHedger': {
+		'magic_numbers': [3113311],
+		'comment_patterns': ['']
+	},
+	'EA-Studio 99531851 GJ-M15': {
+		'magic_numbers': [99531851],
+		'comment_patterns': ['99531851']
+	},
+	'manual': {
+		'magic_numbers': [],
+		'comment_patterns': []
 	}
 }
 
@@ -90,17 +111,23 @@ def filter_data_by_date(data, days_back):
 
 # Algorithm mapping
 def map_algo_name(magic, comment):
-	for identifier, details in ALGO_MAPPING_CONFIG.items():
-		if magic in details['magic_numbers']:
-			if debug: print(f"Matched {magic} to {identifier} using magic numbers")
-			return identifier
-		for pattern in details['comment_patterns']:
-			if fnmatch.fnmatch(str(comment), pattern):
-				if debug: print(f"Matched {comment} to {identifier} using comment patterns")
-				return identifier
-	return comment if comment != 0 else str(magic) if magic != 0 else "UNKNOWN"
-
-
+    for identifier, details in ALGO_MAPPING_CONFIG.items():
+        # Convert magic number to string for matching
+        magic_str = str(magic)
+        for magic_number in details['magic_numbers']:
+            # Convert each magic number in the config to string
+            magic_number_str = str(magic_number)
+            # Check if the magic number starts with the magic number in the config
+            if magic_str.startswith(magic_number_str):
+                if debug: print(f"Matched {magic} to {identifier} using magic numbers")
+                return identifier
+        for pattern in details['comment_patterns']:
+            if fnmatch.fnmatch(str(comment), pattern):
+                if debug: print(f"Matched {comment} to {identifier} using comment patterns")
+                return identifier
+    if pd.isna(magic) and (comment == 0 or comment == ''):
+        return 'manual'
+    return comment if comment != 0 else str(magic) if magic != 0 else "UNKNOWN"
 def evaluate_algorithms_helper(data, group_by_cols):
 	data['Identifier_Combined'] = data.apply(lambda row: map_algo_name(row['MagicNumber'], row['Comment']), axis=1)
 
@@ -509,9 +536,15 @@ class Taxes:
 
 		print("\n📅 Yearly Summary 📅")
 		for index, row in yearly_summaries.iterrows():
+			sum_profit_loss = row['Total Profit'] + row['Total Loss']
+			if sum_profit_loss < 0:
+				sum_profit_loss = f"{Fore.RED}€{sum_profit_loss:.2f}{Style.RESET_ALL}"
+			else:
+				sum_profit_loss = f"€{sum_profit_loss:.2f}"
 			print(f"\n{row['Year']}:")
 			print(f"Total Profit: €{row['Total Profit']:.2f}")
 			print(f"Total Loss: €{row['Total Loss']:.2f}")
+			print(f"Sum: {sum_profit_loss}")
 			if row['Total Loss'] <= -20000:
 				print("⚠️ Warning: Your yearly loss exceeds €20,000! ⚠️")
 
@@ -529,7 +562,13 @@ class Taxes:
 
 		print("\n📆 Monthly Summary By Year 📆")
 		for index, row in monthly_summaries.iterrows():
-			print(f"{row['YearMonth']}:")
+			sum_profit_loss = row['Total Profit'] + row['Total Loss']
+			if sum_profit_loss < 0:
+				sum_profit_loss = f"{Fore.RED}€{sum_profit_loss:.2f}{Style.RESET_ALL}"
+			else:
+				sum_profit_loss = f"€{sum_profit_loss:.2f}"
+
+			print(f"{row['YearMonth']}: 		Sum: {sum_profit_loss}")
 			print(f"  Total Profit: €{row['Total Profit']:.2f}")
 			print(f"  Total Loss: €{row['Total Loss']:.2f}\n")
 
@@ -639,3 +678,4 @@ if __name__ == "__main__":
 		print("Error: Please provide a valid number for days back.")
 		sys.exit(1)
 	main(data_file_path, days_back, show_drawdown)
+
