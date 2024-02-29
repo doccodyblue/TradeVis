@@ -78,9 +78,13 @@ ALGO_MAPPING_CONFIG = {
 		'magic_numbers': [99531851],
 		'comment_patterns': ['99531851']
 	},
-	'manual': {
-		'magic_numbers': [],
-		'comment_patterns': []
+	'EA-Studio 59796456': {
+		'magic_numbers': [59796456],
+		'comment_patterns': ['59796456']
+	},
+	'AS-HoldOverNight': {
+		'magic_numbers': [92883],
+		'comment_patterns': ['AS-HoldOvernight']
 	}
 }
 
@@ -111,23 +115,27 @@ def filter_data_by_date(data, days_back):
 
 # Algorithm mapping
 def map_algo_name(magic, comment):
-    for identifier, details in ALGO_MAPPING_CONFIG.items():
-        # Convert magic number to string for matching
-        magic_str = str(magic)
-        for magic_number in details['magic_numbers']:
-            # Convert each magic number in the config to string
-            magic_number_str = str(magic_number)
-            # Check if the magic number starts with the magic number in the config
-            if magic_str.startswith(magic_number_str):
-                if debug: print(f"Matched {magic} to {identifier} using magic numbers")
-                return identifier
-        for pattern in details['comment_patterns']:
-            if fnmatch.fnmatch(str(comment), pattern):
-                if debug: print(f"Matched {comment} to {identifier} using comment patterns")
-                return identifier
-    if pd.isna(magic) and (comment == 0 or comment == ''):
-        return 'manual'
-    return comment if comment != 0 else str(magic) if magic != 0 else "UNKNOWN"
+	if magic == 0 and pd.isna(comment):
+		if debug:
+			print(f"Magic and comment are NaN, returning 'manual'")
+		return 'Manual'
+
+	for identifier, details in ALGO_MAPPING_CONFIG.items():
+		# Convert magic number to string for matching
+		magic_str = str(magic)
+		for magic_number in details['magic_numbers']:
+			# Convert each magic number in the config to string
+			magic_number_str = str(magic_number)
+			# Check if the magic number starts with the magic number in the config
+			if magic_str.startswith(magic_number_str):
+				if debug: print(f"Matched {magic} to {identifier} using magic numbers")
+				return identifier
+		for pattern in details['comment_patterns']:
+			if fnmatch.fnmatch(str(comment), pattern):
+				if debug: print(f"Matched {comment} to {identifier} using comment patterns")
+				return identifier
+
+	return comment if comment != 0 else str(magic) if magic != 0 else "UNKNOWN"
 def evaluate_algorithms_helper(data, group_by_cols):
 	data['Identifier_Combined'] = data.apply(lambda row: map_algo_name(row['MagicNumber'], row['Comment']), axis=1)
 
@@ -296,48 +304,48 @@ def plot_cumulative_with_drawdown_debug(data, cumulative_data):
 
 
 def plot_cumulative_with_drawdown_lines(data, cumulative_data):
-    """
-    Plot cumulative profit over time with drawdown highlighting and ensure "All Algos Combined" is displayed.
-    """
-    fig = go.Figure()
+	"""
+	Plot cumulative profit over time with drawdown highlighting and ensure "All Algos Combined" is displayed.
+	"""
+	fig = go.Figure()
 
-    # Plotting cumulative profit for each algorithm
-    for identifier in cumulative_data['Identifier_Combined'].unique():
-        algo_data = cumulative_data[cumulative_data['Identifier_Combined'] == identifier]
-        fig.add_trace(
-            go.Scatter(x=algo_data['OpenTime'], y=algo_data['CumulativeProfit'], mode='lines', name=identifier,
-                       line=dict(width=2))
-        )
-        # Highlighting the drawdown for each algorithm
-        start_point, end_point, max_drawdown_val = calculate_drawdown(algo_data['CumulativeProfit'].values)
-        if start_point is not None and end_point is not None:
-            fig.add_shape(
-                type="rect",
-                x0=algo_data.iloc[start_point]['OpenTime'],
-                x1=algo_data.iloc[end_point]['OpenTime'],
-                y0=max_drawdown_val,
-                y1=algo_data.iloc[start_point]['CumulativeProfit'],
-                fillcolor="lightpink",
-                opacity=0.5,
-                line=dict(color="lightpink", width=0.5)
-            )
+	# Plotting cumulative profit for each algorithm
+	for identifier in cumulative_data['Identifier_Combined'].unique():
+		algo_data = cumulative_data[cumulative_data['Identifier_Combined'] == identifier]
+		fig.add_trace(
+			go.Scatter(x=algo_data['OpenTime'], y=algo_data['CumulativeProfit'], mode='lines', name=identifier,
+					   line=dict(width=2))
+		)
+		# Highlighting the drawdown for each algorithm
+		start_point, end_point, max_drawdown_val = calculate_drawdown(algo_data['CumulativeProfit'].values)
+		if start_point is not None and end_point is not None:
+			fig.add_shape(
+				type="rect",
+				x0=algo_data.iloc[start_point]['OpenTime'],
+				x1=algo_data.iloc[end_point]['OpenTime'],
+				y0=max_drawdown_val,
+				y1=algo_data.iloc[start_point]['CumulativeProfit'],
+				fillcolor="lightpink",
+				opacity=0.5,
+				line=dict(color="lightpink", width=0.5)
+			)
 
-    # Plotting cumulative profit for "All Algos Combined"
-    data_total = data.copy()
-    data_total['CumulativeProfit'] = data['Profit'].cumsum()
-    fig.add_trace(go.Scatter(x=data_total['OpenTime'], y=data_total['CumulativeProfit'], mode='lines',
-                             name='All Algos Combined', line=dict(color='red', width=3, dash='dot')))
+	# Plotting cumulative profit for "All Algos Combined"
+	data_total = data.copy()
+	data_total['CumulativeProfit'] = data['Profit'].cumsum()
+	fig.add_trace(go.Scatter(x=data_total['OpenTime'], y=data_total['CumulativeProfit'], mode='lines',
+							 name='All Algos Combined', line=dict(color='red', width=3, dash='dot')))
 
-    fig.update_layout(
-        title='Cumulative Profit Over Time by Algorithm with Drawdown Highlighting',
-        hovermode="x unified",
-        plot_bgcolor="black",
-        paper_bgcolor="black",
-        font=dict(color="white"),
-        xaxis=dict(gridcolor="gray"),
-        yaxis=dict(gridcolor="gray")
-    )
-    fig.show()
+	fig.update_layout(
+		title='Cumulative Profit Over Time by Algorithm with Drawdown Highlighting',
+		hovermode="x unified",
+		plot_bgcolor="black",
+		paper_bgcolor="black",
+		font=dict(color="white"),
+		xaxis=dict(gridcolor="gray"),
+		yaxis=dict(gridcolor="gray")
+	)
+	fig.show()
 
 
 def plot_cumulative_profit_and_costs(data):
@@ -411,26 +419,26 @@ def plot_cumulative_profit_over_time(data, cumulative_data):
 
 
 def setup_cli_args():
-    parser = argparse.ArgumentParser(description="Trade Analysis Tool")
+	parser = argparse.ArgumentParser(description="Trade Analysis Tool")
 
-    # Add data file path argument
-    parser.add_argument("data_file_path", type=str, help="Path to the data file.")
+	# Add data file path argument
+	parser.add_argument("data_file_path", type=str, help="Path to the data file.")
 
-    # Add days back argument
-    parser.add_argument("days_back", type=int, help="Number of days back to consider.")
+	# Add days back argument
+	parser.add_argument("days_back", type=int, help="Number of days back to consider.")
 
-    # Add balance argument
-    parser.add_argument("--balance", type=float, default=10000.0, help="Account balance.")
+	# Add balance argument
+	parser.add_argument("--balance", type=float, default=10000.0, help="Account balance.")
 
-    # Add leverage argument
-    parser.add_argument("--leverage", type=int, default=50, help="Account leverage.")
+	# Add leverage argument
+	parser.add_argument("--leverage", type=int, default=50, help="Account leverage.")
 
-    # Add -d flag for drawdown visualization
-    parser.add_argument("-d", "--drawdown", action="store_true",
-                        help="Enable drawdown visualization. If not set, don't visualize the drawdowns.")
+	# Add -d flag for drawdown visualization
+	parser.add_argument("-d", "--drawdown", action="store_true",
+						help="Enable drawdown visualization. If not set, don't visualize the drawdowns.")
 
-    args = parser.parse_args()
-    return args
+	args = parser.parse_args()
+	return args
 
 
 def plot_relative_risk_with_algo(data):
