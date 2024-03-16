@@ -13,6 +13,7 @@ debug = False
 
 # Configuration Section
 # * is working as a wildcard in the comment pattern
+# * should also work as a wildcard in the magic number pattern, just give the first few digits of the magic number BUT AS A STRING, followed by *
 ALGO_MAPPING_CONFIG = {
 	'EA Zone USDJPY': {
 		'magic_numbers': [],
@@ -115,27 +116,35 @@ def filter_data_by_date(data, days_back):
 
 # Algorithm mapping
 def map_algo_name(magic, comment):
-	if magic == 0 and pd.isna(comment):
-		if debug:
-			print(f"Magic and comment are NaN, returning 'manual'")
-		return 'Manual'
+    if magic == 0 and pd.isna(comment):
+        if debug:
+            print(f"Magic and comment are NaN, returning 'manual'")
+        return 'Manual'
 
-	for identifier, details in ALGO_MAPPING_CONFIG.items():
-		# Convert magic number to string for matching
-		magic_str = str(magic)
-		for magic_number in details['magic_numbers']:
-			# Convert each magic number in the config to string
-			magic_number_str = str(magic_number)
-			# Check if the magic number starts with the magic number in the config
-			if magic_str.startswith(magic_number_str):
-				if debug: print(f"Matched {magic} to {identifier} using magic numbers")
-				return identifier
-		for pattern in details['comment_patterns']:
-			if fnmatch.fnmatch(str(comment), pattern):
-				if debug: print(f"Matched {comment} to {identifier} using comment patterns")
-				return identifier
+    for identifier, details in ALGO_MAPPING_CONFIG.items():
+        # Convert magic number to string for matching
+        magic_str = str(magic)
+        for magic_number in details['magic_numbers']:
+            # Convert each magic number in the config to string
+            magic_number_str = str(magic_number)
+            # Check if the magic number in the config ends with a *
+            if magic_number_str.endswith('*'):
+                # If it does, remove the * and use startswith for matching
+                magic_number_str = magic_number_str[:-1]
+                if magic_str.startswith(magic_number_str):
+                    if debug: print(f"Matched {magic} to {identifier} using magic numbers")
+                    return identifier
+            else:
+                # If it doesn't, use equality check for matching
+                if magic_str == magic_number_str:
+                    if debug: print(f"Matched {magic} to {identifier} using magic numbers")
+                    return identifier
+        for pattern in details['comment_patterns']:
+            if fnmatch.fnmatch(str(comment), pattern):
+                if debug: print(f"Matched {comment} to {identifier} using comment patterns")
+                return identifier
 
-	return comment if comment != 0 else str(magic) if magic != 0 else "UNKNOWN"
+    return comment if comment != 0 else str(magic) if magic != 0 else "UNKNOWN"
 
 def evaluate_algorithms_helper(data, group_by_cols):
     data['Identifier_Combined'] = data.apply(lambda row: map_algo_name(row['MagicNumber'], row['Comment']), axis=1)
@@ -764,49 +773,3 @@ if __name__ == "__main__":
 		print("Error: Please provide a valid number for days back.")
 		sys.exit(1)
 	main(data_file_path, days_back, show_drawdown, export)
-#
-#
-#
-# # Main Function
-# def main(data_file_path, days_back, show_drawdown=False):
-# 	data = load_and_preprocess_data(data_file_path)
-# 	filtered_data = filter_data_by_date(data, days_back)
-# 	algo_evaluation = evaluate_algorithms_by_symbol(filtered_data)
-# 	plot_total_profit_by_symbol(algo_evaluation)
-# 	cumulative_data = evaluate_algorithms_cumulative(filtered_data)
-# 	if show_drawdown:
-# 		plot_cumulative_with_drawdown_lines(filtered_data, cumulative_data)
-# 	else:
-# 		plot_cumulative_profit_over_time(filtered_data, cumulative_data)
-# 	plot_relative_risk_with_algo(filtered_data)
-# 	plot_cumulative_profit_and_costs(filtered_data)
-#
-# 	# Assuming `algo_evaluation` is the DataFrame you got from your `evaluate_algorithms` function
-# 	algo_evaluation = evaluate_algorithms(filtered_data)
-#
-# 	# Populate algo_stats
-# 	algo_stats = populate_algo_stats_from_dataframe(algo_evaluation)
-#
-#
-# 	Taxes.get_summary(data)
-# 	Taxes.plot_monthly_summary(data)
-# 	export_to_excel(data, 'taxes_overview.xlsx')
-#
-#
-# # Execution
-# if __name__ == "__main__":
-# 	args = setup_cli_args()
-# 	data_file_path = args.data_file_path
-# 	days_back = args.days_back
-# 	show_drawdown = args.drawdown
-# 	balance = args.balance
-# 	leverage = args.leverage
-# 	account_info = {'balance': balance, 'leverage': leverage}
-#
-# 	try:
-# 		days_back = int(sys.argv[2])
-# 	except ValueError:
-# 		print("Error: Please provide a valid number for days back.")
-# 		sys.exit(1)
-# 	main(data_file_path, days_back, show_drawdown)
-#
