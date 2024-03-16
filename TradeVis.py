@@ -136,28 +136,67 @@ def map_algo_name(magic, comment):
 				return identifier
 
 	return comment if comment != 0 else str(magic) if magic != 0 else "UNKNOWN"
+
 def evaluate_algorithms_helper(data, group_by_cols):
-	data['Identifier_Combined'] = data.apply(lambda row: map_algo_name(row['MagicNumber'], row['Comment']), axis=1)
+    data['Identifier_Combined'] = data.apply(lambda row: map_algo_name(row['MagicNumber'], row['Comment']), axis=1)
 
-	# Aggregation
-	grouped = data.groupby(group_by_cols).agg(
-		total_profit=pd.NamedAgg(column='Profit', aggfunc=sum),
-		total_losses=pd.NamedAgg(column='Profit', aggfunc=lambda x: x[x < 0].sum()),
-		avg_win_trade=pd.NamedAgg(column='Profit', aggfunc=lambda x: x[x > 0].mean()),
-		avg_loss_trade=pd.NamedAgg(column='Profit', aggfunc=lambda x: x[x <= 0].mean()),
-		number_of_trades=pd.NamedAgg(column='TradeID', aggfunc='count'),
-		winning_trades=pd.NamedAgg(column='Profit', aggfunc=lambda x: (x > 0).sum()),
-		losing_trades=pd.NamedAgg(column='Profit', aggfunc=lambda x: (x <= 0).sum()),
-		max_drawdown=pd.NamedAgg(column='Profit', aggfunc='min'),
-		first_trade_date=pd.NamedAgg(column='OpenTime', aggfunc='min')
-	).reset_index()
+    # Aggregation
+    grouped = data.groupby(group_by_cols).agg(
+        total_profit=pd.NamedAgg(column='Profit', aggfunc=sum),
+        total_losses=pd.NamedAgg(column='Profit', aggfunc=lambda x: x[x < 0].sum()),
+        avg_win_trade=pd.NamedAgg(column='Profit', aggfunc=lambda x: x[x > 0].mean()),
+        avg_loss_trade=pd.NamedAgg(column='Profit', aggfunc=lambda x: x[x <= 0].mean()),
+        number_of_trades=pd.NamedAgg(column='TradeID', aggfunc='count'),
+        winning_trades=pd.NamedAgg(column='Profit', aggfunc=lambda x: (x > 0).sum()),
+        losing_trades=pd.NamedAgg(column='Profit', aggfunc=lambda x: (x <= 0).sum()),
+        max_drawdown=pd.NamedAgg(column='Profit', aggfunc='min'),
+        first_trade_date=pd.NamedAgg(column='OpenTime', aggfunc='min'),
+        last_trade_date=pd.NamedAgg(column='OpenTime', aggfunc='max')  # Added this line
+    ).reset_index()
 
-	# Post-aggregation calculations
-	grouped['Risk_Reward_Ratio'] = grouped['avg_win_trade'] / abs(grouped['avg_loss_trade'])
-	grouped['Profit_Factor'] = grouped['total_profit'] / abs(grouped['total_losses'])
-	grouped['Score'] = grouped['total_profit'] - grouped['max_drawdown']
+    # Post-aggregation calculations
+    grouped['Risk_Reward_Ratio'] = grouped['avg_win_trade'] / abs(grouped['avg_loss_trade'])
+    grouped['Profit_Factor'] = grouped['total_profit'] / abs(grouped['total_losses'])
+    grouped['Score'] = grouped['total_profit'] - grouped['max_drawdown']
 
-	return grouped
+    return grouped
+
+def plot_total_profit_by_symbol(data):
+    # Calculate number of days since the first trade for each algorithm
+    data['days_since_first_trade'] = (pd.Timestamp.now() - data['first_trade_date']).dt.days
+
+    # Create custom hover text
+    data['hover_text'] = "Algorithm: " + data['Identifier_Combined'] + \
+                         "<br>Total Profit: " + data['total_profit'].astype(str) + \
+                         "<br>Number of Trades: " + data['number_of_trades'].astype(str) + \
+                         "<br>Winning Trades: " + data['winning_trades'].astype(str) + \
+                         "<br>Losing Trades: " + data['losing_trades'].astype(str) + \
+                         "<br>Risk-Reward Ratio: " + data['Risk_Reward_Ratio'].round(2).astype(str) + \
+                         "<br>Profit Factor: " + data['Profit_Factor'].round(2).astype(str) + \
+                         "<br>Days Since First Trade: " + data['days_since_first_trade'].astype(str) + \
+                         "<br>Last Trade Made: " + data['last_trade_date'].astype(str) + \
+                         "<br>Traded Symbol: " + data['Symbol']
+
+    fig = px.bar(data,
+                 x='total_profit',
+                 y='Identifier_Combined',
+                 color='Symbol',
+                 orientation='h',
+                 labels={'Identifier_Combined': 'Algorithm', 'total_profit': 'Total Profit', 'Symbol': 'Traded Symbol'},
+                 title='Total Profit by Algorithm and Traded Symbol',
+                 hover_data={'total_profit': False, 'Symbol': False, 'Identifier_Combined': False},
+                 hover_name='hover_text')
+
+    fig.update_layout(
+        showlegend=True,
+        plot_bgcolor="black",
+        paper_bgcolor="black",
+        font=dict(color="white"),
+        xaxis=dict(gridcolor="gray"),
+        yaxis=dict(gridcolor="gray")
+    )
+    fig.show()
+
 def evaluate_algorithms(data):
 	grouped = evaluate_algorithms_helper(data, ['Identifier_Combined'])
 	# Calculate robustness score
@@ -195,41 +234,6 @@ def calculate_drawdown(cumulative_returns):
 
 	return start_point, end_point, drawdown[end_point]
 
-
-def plot_total_profit_by_symbol(data):
-	# Calculate number of days since the first trade for each algorithm
-	data['days_since_first_trade'] = (pd.Timestamp.now() - data['first_trade_date']).dt.days
-
-	# Create custom hover text
-	data['hover_text'] = "Algorithm: " + data['Identifier_Combined'] + \
-						 "<br>Total Profit: " + data['total_profit'].astype(str) + \
-						 "<br>Number of Trades: " + data['number_of_trades'].astype(str) + \
-						 "<br>Winning Trades: " + data['winning_trades'].astype(str) + \
-						 "<br>Losing Trades: " + data['losing_trades'].astype(str) + \
-						 "<br>Risk-Reward Ratio: " + data['Risk_Reward_Ratio'].round(2).astype(str) + \
-						 "<br>Profit Factor: " + data['Profit_Factor'].round(2).astype(str) + \
-						 "<br>Days Since First Trade: " + data['days_since_first_trade'].astype(str) + \
-						 "<br>Traded Symbol: " + data['Symbol']
-
-	fig = px.bar(data,
-				 x='total_profit',
-				 y='Identifier_Combined',
-				 color='Symbol',
-				 orientation='h',
-				 labels={'Identifier_Combined': 'Algorithm', 'total_profit': 'Total Profit', 'Symbol': 'Traded Symbol'},
-				 title='Total Profit by Algorithm and Traded Symbol',
-				 hover_data={'total_profit': False, 'Symbol': False, 'Identifier_Combined': False},
-				 hover_name='hover_text')
-
-	fig.update_layout(
-		showlegend=True,
-		plot_bgcolor="black",
-		paper_bgcolor="black",
-		font=dict(color="white"),
-		xaxis=dict(gridcolor="gray"),
-		yaxis=dict(gridcolor="gray")
-	)
-	fig.show()
 
 
 def plot_cumulative_with_drawdown_debug(data, cumulative_data):
@@ -643,10 +647,82 @@ class Taxes:
 
 		fig.show()
 
+def setup_cli_args():
+	parser = argparse.ArgumentParser(description="Trade Analysis Tool")
 
+	# Add data file path argument
+	parser.add_argument("data_file_path", type=str, help="Path to the data file.")
 
-# Main Function
-def main(data_file_path, days_back, show_drawdown=False):
+	# Add days back argument
+	parser.add_argument("days_back", type=int, help="Number of days back to consider.")
+
+	# Add balance argument
+	parser.add_argument("--balance", type=float, default=10000.0, help="Account balance.")
+
+	# Add leverage argument
+	parser.add_argument("--leverage", type=int, default=50, help="Account leverage.")
+
+	# Add -d flag for drawdown visualization
+	parser.add_argument("-d", "--drawdown", action="store_true",
+						help="Enable drawdown visualization. If not set, don't visualize the drawdowns.")
+
+	# Add -x flag for Excel export
+	parser.add_argument("-x", "--export", action="store_true",
+						help="Enable Excel export. If not set, don't export to Excel.")
+
+	args = parser.parse_args()
+	return args
+
+def export_to_excel(data, filename):
+	# Extracting monthly data
+	data['YearMonth'] = data['OpenTime'].dt.strftime('%B %Y')
+	data['Year'] = data['OpenTime'].dt.year
+	data['Month'] = data['OpenTime'].dt.strftime('%B')
+
+	# Create a Pandas Excel writer using XlsxWriter as the engine
+	writer = pd.ExcelWriter(filename, engine='xlsxwriter')
+
+	# Define cell formats
+	header_format = writer.book.add_format({'bold': True, 'font_color': 'white', 'bg_color': 'black', 'border': 1})
+	cell_format = writer.book.add_format({'font_color': 'black', 'bg_color': 'white', 'border': 1})
+
+	for year in data['Year'].unique():
+		yearly_data = data[data['Year'] == year]
+		monthly_summaries = yearly_data.groupby('Month').apply(lambda x: pd.Series({
+			'Total Profit': x['Profit'][x['Profit'] > 0].sum(),
+			'Total Loss': x['Profit'][x['Profit'] <= 0].sum(),
+			'Trading Costs': (x['Commission'] + x['Swap']).sum()
+		}))
+
+		# Sort by month
+		month_order = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October',
+					   'November', 'December']
+		monthly_summaries = monthly_summaries.reset_index()
+		monthly_summaries['Month'] = pd.Categorical(monthly_summaries['Month'], categories=month_order, ordered=True)
+		monthly_summaries = monthly_summaries.sort_values(by='Month')
+
+		# Add yearly summary
+		yearly_summary = pd.DataFrame([monthly_summaries.sum(numeric_only=True)], columns=monthly_summaries.columns, index=['Yearly Summary'])
+		monthly_summaries = pd.concat([monthly_summaries, yearly_summary])
+
+		# Write each dataframe to a different worksheet
+		monthly_summaries.to_excel(writer, sheet_name=str(year), index=False)
+
+		# Apply formats to the cells
+		worksheet = writer.sheets[str(year)]
+		for idx, col in enumerate(monthly_summaries):  # loop through all columns
+			series = monthly_summaries[col]
+			max_len = max((
+				series.astype(str).map(len).max(),  # len of largest item
+				len(str(series.name))  # len of column name/header
+				)) + 1  # adding a little extra space
+			worksheet.set_column(idx, idx, max_len, cell_format)  # set column width
+			worksheet.write(0, idx, series.name, header_format)  # write header
+
+	# Close the Pandas Excel writer and output the Excel file
+	writer.save()
+
+def main(data_file_path, days_back, show_drawdown=False, export=False):
 	data = load_and_preprocess_data(data_file_path)
 	filtered_data = filter_data_by_date(data, days_back)
 	algo_evaluation = evaluate_algorithms_by_symbol(filtered_data)
@@ -665,12 +741,13 @@ def main(data_file_path, days_back, show_drawdown=False):
 	# Populate algo_stats
 	algo_stats = populate_algo_stats_from_dataframe(algo_evaluation)
 
-
 	Taxes.get_summary(data)
 	Taxes.plot_monthly_summary(data)
+	if export:
+		account_name = data_file_path.split('/')[-1].replace('.txt', '')
+		filename = f'taxes_overview_{account_name}.xlsx'
+		export_to_excel(data, filename)
 
-
-# Execution
 if __name__ == "__main__":
 	args = setup_cli_args()
 	data_file_path = args.data_file_path
@@ -678,6 +755,7 @@ if __name__ == "__main__":
 	show_drawdown = args.drawdown
 	balance = args.balance
 	leverage = args.leverage
+	export = args.export
 	account_info = {'balance': balance, 'leverage': leverage}
 
 	try:
@@ -685,5 +763,50 @@ if __name__ == "__main__":
 	except ValueError:
 		print("Error: Please provide a valid number for days back.")
 		sys.exit(1)
-	main(data_file_path, days_back, show_drawdown)
-
+	main(data_file_path, days_back, show_drawdown, export)
+#
+#
+#
+# # Main Function
+# def main(data_file_path, days_back, show_drawdown=False):
+# 	data = load_and_preprocess_data(data_file_path)
+# 	filtered_data = filter_data_by_date(data, days_back)
+# 	algo_evaluation = evaluate_algorithms_by_symbol(filtered_data)
+# 	plot_total_profit_by_symbol(algo_evaluation)
+# 	cumulative_data = evaluate_algorithms_cumulative(filtered_data)
+# 	if show_drawdown:
+# 		plot_cumulative_with_drawdown_lines(filtered_data, cumulative_data)
+# 	else:
+# 		plot_cumulative_profit_over_time(filtered_data, cumulative_data)
+# 	plot_relative_risk_with_algo(filtered_data)
+# 	plot_cumulative_profit_and_costs(filtered_data)
+#
+# 	# Assuming `algo_evaluation` is the DataFrame you got from your `evaluate_algorithms` function
+# 	algo_evaluation = evaluate_algorithms(filtered_data)
+#
+# 	# Populate algo_stats
+# 	algo_stats = populate_algo_stats_from_dataframe(algo_evaluation)
+#
+#
+# 	Taxes.get_summary(data)
+# 	Taxes.plot_monthly_summary(data)
+# 	export_to_excel(data, 'taxes_overview.xlsx')
+#
+#
+# # Execution
+# if __name__ == "__main__":
+# 	args = setup_cli_args()
+# 	data_file_path = args.data_file_path
+# 	days_back = args.days_back
+# 	show_drawdown = args.drawdown
+# 	balance = args.balance
+# 	leverage = args.leverage
+# 	account_info = {'balance': balance, 'leverage': leverage}
+#
+# 	try:
+# 		days_back = int(sys.argv[2])
+# 	except ValueError:
+# 		print("Error: Please provide a valid number for days back.")
+# 		sys.exit(1)
+# 	main(data_file_path, days_back, show_drawdown)
+#
